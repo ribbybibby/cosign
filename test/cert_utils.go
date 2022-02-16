@@ -23,6 +23,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/asn1"
 	"math/big"
+	"net/url"
 	"time"
 )
 
@@ -115,21 +116,30 @@ func GenerateSubordinateCa(rootTemplate *x509.Certificate, rootPriv crypto.Signe
 	return cert, priv, nil
 }
 
-func GenerateLeafCert(subject string, oidcIssuer string, parentTemplate *x509.Certificate, parentPriv crypto.Signer) (*x509.Certificate, *ecdsa.PrivateKey, error) {
+func GenerateLeafCert(uri string, email string, oidcIssuer string, parentTemplate *x509.Certificate, parentPriv crypto.Signer) (*x509.Certificate, *ecdsa.PrivateKey, error) {
 	certTemplate := &x509.Certificate{
-		SerialNumber:   big.NewInt(1),
-		EmailAddresses: []string{subject},
-		NotBefore:      time.Now().Add(-1 * time.Minute),
-		NotAfter:       time.Now().Add(time.Hour),
-		KeyUsage:       x509.KeyUsageDigitalSignature,
-		ExtKeyUsage:    []x509.ExtKeyUsage{x509.ExtKeyUsageCodeSigning},
-		IsCA:           false,
+		SerialNumber: big.NewInt(1),
+		NotBefore:    time.Now().Add(-1 * time.Minute),
+		NotAfter:     time.Now().Add(time.Hour),
+		KeyUsage:     x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageCodeSigning},
+		IsCA:         false,
 		ExtraExtensions: []pkix.Extension{{
 			// OID for OIDC Issuer extension
 			Id:       asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 57264, 1, 1},
 			Critical: false,
 			Value:    []byte(oidcIssuer),
 		}},
+	}
+	if uri != "" {
+		u, err := url.Parse(uri)
+		if err != nil {
+			return nil, nil, err
+		}
+		certTemplate.URIs = []*url.URL{u}
+	}
+	if email != "" {
+		certTemplate.EmailAddresses = []string{email}
 	}
 
 	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)

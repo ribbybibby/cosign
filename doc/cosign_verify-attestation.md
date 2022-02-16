@@ -64,6 +64,7 @@ cosign verify-attestation [flags]
       --cert string                                                                              path to the public certificate
       --cert-email string                                                                        the email expected in a valid Fulcio certificate
       --cert-oidc-issuer string                                                                  the OIDC issuer expected in a valid Fulcio certificate, e.g. https://token.actions.githubusercontent.com or https://oauth2.sigstore.dev/auth
+      --cert-subject string                                                                      the subject expected in a valid Fulcio certificate
       --check-claims                                                                             whether to check the claims found (default true)
   -h, --help                                                                                     help for verify-attestation
       --k8s-keychain                                                                             whether to use the kubernetes keychain instead of the default keychain (supports workload identity).

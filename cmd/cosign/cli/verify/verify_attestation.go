@@ -49,6 +49,7 @@ type VerifyAttestationCommand struct {
 	options.RegistryOptions
 	CheckClaims    bool
 	CertRef        string
+	CertSubject    string
 	CertEmail      string
 	CertOidcIssuer string
 	KeyRef         string
@@ -77,6 +78,7 @@ func (c *VerifyAttestationCommand) Exec(ctx context.Context, images []string) (e
 	}
 	co := &cosign.CheckOpts{
 		RegistryClientOpts: ociremoteOpts,
+		CertSubject:        c.CertSubject,
 		CertEmail:          c.CertEmail,
 		CertOidcIssuer:     c.CertOidcIssuer,
 	}

@@ -51,6 +51,7 @@ type VerifyCommand struct {
 	CheckClaims    bool
 	KeyRef         string
 	CertRef        string
+	CertSubject    string
 	CertEmail      string
 	CertOidcIssuer string
 	Sk             bool
@@ -92,6 +93,7 @@ func (c *VerifyCommand) Exec(ctx context.Context, images []string) (err error) {
 	co := &cosign.CheckOpts{
 		Annotations:        c.Annotations.Annotations,
 		RegistryClientOpts: ociremoteOpts,
+		CertSubject:        c.CertSubject,
 		CertEmail:          c.CertEmail,
 		CertOidcIssuer:     c.CertOidcIssuer,
 		SignatureRef:       c.SignatureRef,

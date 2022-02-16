@@ -91,6 +91,7 @@ against the transparency log.`,
 				CheckClaims:     o.CheckClaims,
 				KeyRef:          o.Key,
 				CertRef:         o.CertVerify.Cert,
+				CertSubject:     o.CertVerify.CertSubject,
 				CertEmail:       o.CertVerify.CertEmail,
 				CertOidcIssuer:  o.CertVerify.CertOidcIssuer,
 				Sk:              o.SecurityKey.Use,
@@ -167,6 +168,7 @@ against the transparency log.`,
 				RegistryOptions: o.Registry,
 				CheckClaims:     o.CheckClaims,
 				CertRef:         o.CertVerify.Cert,
+				CertSubject:     o.CertVerify.CertSubject,
 				CertEmail:       o.CertVerify.CertEmail,
 				CertOidcIssuer:  o.CertVerify.CertOidcIssuer,
 				KeyRef:          o.Key,
@@ -247,7 +249,7 @@ The blob may be specified as a path to a file or - for stdin.`,
 				BundlePath: o.BundlePath,
 			}
 			if err := verify.VerifyBlobCmd(cmd.Context(), ko, o.CertVerify.Cert,
-				o.CertVerify.CertEmail, o.CertVerify.CertOidcIssuer, o.Signature, args[0]); err != nil {
+				o.CertVerify.CertSubject, o.CertVerify.CertEmail, o.CertVerify.CertOidcIssuer, o.Signature, args[0]); err != nil {
 				return errors.Wrapf(err, "verifying blob %s", args)
 			}
 			return nil

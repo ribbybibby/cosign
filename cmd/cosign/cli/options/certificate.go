@@ -21,6 +21,7 @@ import (
 // CertVerifyOptions is the wrapper for certificate verification.
 type CertVerifyOptions struct {
 	Cert           string
+	CertSubject    string
 	CertEmail      string
 	CertOidcIssuer string
 }
@@ -31,6 +32,9 @@ var _ Interface = (*RekorOptions)(nil)
 func (o *CertVerifyOptions) AddFlags(cmd *cobra.Command) {
 	cmd.Flags().StringVar(&o.Cert, "cert", "",
 		"path to the public certificate")
+
+	cmd.Flags().StringVar(&o.CertSubject, "cert-subject", "",
+		"the subject expected in a valid Fulcio certificate")
 
 	cmd.Flags().StringVar(&o.CertEmail, "cert-email", "",
 		"the email expected in a valid Fulcio certificate")

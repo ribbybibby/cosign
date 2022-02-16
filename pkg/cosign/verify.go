@@ -74,6 +74,8 @@ type CheckOpts struct {
 
 	// RootCerts are the root CA certs used to verify a signature's chained certificate.
 	RootCerts *x509.CertPool
+	// CertSubject is the subject expected for a certificate to be valid. The empty string means any subject can be valid.
+	CertSubject string
 	// CertEmail is the email expected for a certificate to be valid. The empty string means any certificate can be valid.
 	CertEmail string
 	// CertOidcIssuer is the OIDC issuer expected for a certificate to be valid. The empty string means any certificate can be valid.
@@ -150,6 +152,26 @@ func ValidateAndUnpackCert(cert *x509.Certificate, co *CheckOpts) (signature.Ver
 	// Now verify the cert, then the signature.
 	if err := TrustedCert(cert, co.RootCerts); err != nil {
 		return nil, err
+	}
+	if co.CertSubject != "" {
+		subjectVerified := false
+		for _, em := range cert.EmailAddresses {
+			if co.CertSubject == em {
+				subjectVerified = true
+				break
+			}
+		}
+		if !subjectVerified {
+			for _, u := range cert.URIs {
+				if co.CertSubject == u.String() {
+					subjectVerified = true
+					break
+				}
+			}
+		}
+		if !subjectVerified {
+			return nil, errors.New("expected subject not found in certificate")
+		}
 	}
 	if co.CertEmail != "" {
 		emailVerified := false
