@@ -22,47 +22,48 @@ import (
 	"os"
 
 	"github.com/google/go-containerregistry/pkg/name"
+	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/sigstore/cosign/cmd/cosign/cli/options"
-	ociremote "github.com/sigstore/cosign/pkg/oci/remote"
+	"github.com/sigstore/cosign/pkg/cosign"
 )
 
-func SBOMCmd(ctx context.Context, regOpts options.RegistryOptions, imageRef string, out io.Writer) ([]string, error) {
+func SBOMCmd(ctx context.Context, opts options.DownloadSBOMOptions, imageRef string, out io.Writer) ([]string, error) {
 	ref, err := name.ParseReference(imageRef)
 	if err != nil {
 		return nil, err
 	}
 
-	ociremoteOpts, err := regOpts.ClientOpts(ctx)
+	ociremoteOpts, err := opts.Registry.ClientOpts(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	se, err := ociremote.SignedEntity(ref, ociremoteOpts...)
-	if err != nil {
-		return nil, err
-	}
+	var sbom *cosign.AttachmentPayload
 
-	file, err := se.Attachment("sbom")
-	if err != nil {
-		return nil, err
+	if opts.Platform != "" {
+		platform, err := v1.ParsePlatform(opts.Platform)
+		if err != nil {
+			return nil, err
+		}
+
+		sbom, err = cosign.FetchAttachmentFromIndex(ctx, ref, *platform, cosign.SBOM, ociremoteOpts...)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		sbom, err = cosign.FetchAttachmentForReference(ctx, ref, cosign.SBOM, ociremoteOpts...)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// "attach sbom" attaches a single static.NewFile
 	sboms := make([]string, 0, 1)
 
-	mt, err := file.FileMediaType()
-	if err != nil {
-		return nil, err
-	}
+	fmt.Fprintf(os.Stderr, "Found SBOM of media type: %s\n", sbom.FileMediaType)
 
-	fmt.Fprintf(os.Stderr, "Found SBOM of media type: %s\n", mt)
-	sbom, err := file.Payload()
-	if err != nil {
-		return nil, err
-	}
-
-	sboms = append(sboms, string(sbom))
-	fmt.Fprintln(out, string(sbom))
+	sboms = append(sboms, string(sbom.Payload))
+	fmt.Fprintln(out, string(sbom.Payload))
 
 	return sboms, nil
 }

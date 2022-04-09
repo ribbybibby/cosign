@@ -24,8 +24,11 @@ import (
 	"runtime"
 
 	"github.com/google/go-containerregistry/pkg/name"
+	v1 "github.com/google/go-containerregistry/pkg/v1"
+	"github.com/google/go-containerregistry/pkg/v1/types"
 	"github.com/pkg/errors"
 	"github.com/sigstore/cosign/pkg/cosign/bundle"
+	"github.com/sigstore/cosign/pkg/oci"
 	ociremote "github.com/sigstore/cosign/pkg/oci/remote"
 	"knative.dev/pkg/pool"
 )
@@ -53,6 +56,11 @@ type AttestationPayload struct {
 	PayloadType string       `json:"payloadType"`
 	PayLoad     string       `json:"payload"`
 	Signatures  []Signatures `json:"signatures"`
+}
+
+type AttachmentPayload struct {
+	Payload       []byte
+	FileMediaType types.MediaType
 }
 
 const (
@@ -147,6 +155,71 @@ func FetchAttestationsForReference(ctx context.Context, ref name.Reference, opts
 	}
 
 	return attestations, nil
+}
+
+func FetchAttachmentForReference(ctx context.Context, ref name.Reference, attachment string, opts ...ociremote.Option) (*AttachmentPayload, error) {
+	simg, err := ociremote.SignedEntity(ref, opts...)
+	if err != nil {
+		return nil, err
+	}
+
+	file, err := simg.Attachment(attachment)
+	if err != nil {
+		return nil, err
+	}
+
+	return attachmentPayload(file)
+}
+
+func FetchAttachmentFromIndex(ctx context.Context, ref name.Reference, platform v1.Platform, attachment string, opts ...ociremote.Option) (*AttachmentPayload, error) {
+	sidx, err := ociremote.SignedEntity(ref, opts...)
+	if err != nil {
+		return nil, err
+	}
+
+	ii, ok := sidx.(oci.SignedImageIndex)
+	if !ok {
+		return nil, fmt.Errorf("%s is not an index", ref)
+	}
+	im, err := ii.IndexManifest()
+	if err != nil {
+		return nil, err
+	}
+	for _, desc := range im.Manifests {
+		if !desc.Platform.Equals(platform) {
+			continue
+		}
+		simg, err := ociremote.SignedEntity(ref.Context().Digest(desc.Digest.String()), opts...)
+		if err != nil {
+			return nil, err
+		}
+
+		file, err := simg.Attachment(attachment)
+		if err != nil {
+			return nil, err
+		}
+
+		return attachmentPayload(file)
+	}
+
+	return nil, fmt.Errorf("no child with platform %+v in index %s", platform, ref)
+}
+
+func attachmentPayload(file oci.File) (*AttachmentPayload, error) {
+	payload, err := file.Payload()
+	if err != nil {
+		return nil, err
+	}
+
+	mt, err := file.FileMediaType()
+	if err != nil {
+		return nil, err
+	}
+
+	return &AttachmentPayload{
+		Payload:       payload,
+		FileMediaType: mt,
+	}, nil
 }
 
 // FetchLocalSignedPayloadFromPath fetches a local signed payload from a path to a file

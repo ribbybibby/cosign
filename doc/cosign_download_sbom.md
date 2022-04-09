@@ -19,6 +19,7 @@ cosign download sbom [flags]
       --attachment-tag-prefix [AttachmentTagPrefix]sha256-[TargetImageDigest].[AttachmentName]   optional custom prefix to use for attached image tags. Attachment images are tagged as: [AttachmentTagPrefix]sha256-[TargetImageDigest].[AttachmentName]
   -h, --help                                                                                     help for sbom
       --k8s-keychain                                                                             whether to use the kubernetes keychain instead of the default keychain (supports workload identity).
+      --platform string                                                                          download from a specific platform in a multi-arch image. The format is os/arch[/variant][:osversion]
 ```
 
 ### Options inherited from parent commands

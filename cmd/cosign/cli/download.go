@@ -56,7 +56,7 @@ func downloadSignature() *cobra.Command {
 }
 
 func downloadSBOM() *cobra.Command {
-	o := &options.RegistryOptions{}
+	o := &options.DownloadSBOMOptions{}
 
 	cmd := &cobra.Command{
 		Use:     "sbom",
