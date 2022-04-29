@@ -20,6 +20,7 @@ cosign clean [flags]
   -f, --force                                                                                    do not prompt for confirmation
   -h, --help                                                                                     help for clean
       --k8s-keychain                                                                             whether to use the kubernetes keychain instead of the default keychain (supports workload identity).
+      --platform platform                                                                        resolve multi-arch images to a specific platform. Specify the platform in the form os/arch[/variant][:osversion] (e.g. linux/amd64).
       --type string                                                                              a type of clean: <signature|attestation|sbom|all> (default: all) (default "all")
 ```
 

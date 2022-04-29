@@ -20,6 +20,7 @@ cosign attach signature [flags]
   -h, --help                                                                                     help for signature
       --k8s-keychain                                                                             whether to use the kubernetes keychain instead of the default keychain (supports workload identity).
       --payload string                                                                           path to the payload covered by the signature (if using another format)
+      --platform platform                                                                        resolve multi-arch images to a specific platform. Specify the platform in the form os/arch[/variant][:osversion] (e.g. linux/amd64).
       --signature string                                                                         the signature, path to the signature, or {-} for stdin
 ```
 

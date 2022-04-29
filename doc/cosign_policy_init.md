@@ -32,6 +32,7 @@ cosign policy init [flags]
   -m, --maintainers strings                                                                      list of maintainers to add to the root policy
       --namespace string                                                                         registry namespace that the root policy belongs to (default "ns")
       --out string                                                                               output policy locally (default "o")
+      --platform platform                                                                        resolve multi-arch images to a specific platform. Specify the platform in the form os/arch[/variant][:osversion] (e.g. linux/amd64).
       --threshold int                                                                            threshold for root policy signers (default 1)
 ```
 

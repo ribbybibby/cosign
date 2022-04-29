@@ -52,6 +52,16 @@ func SignedEntity(ref name.Reference, options ...Option) (oci.SignedEntity, erro
 
 	switch got.MediaType {
 	case types.OCIImageIndex, types.DockerManifestList:
+		if o.Platform != nil {
+			i, err := got.Image()
+			if err != nil {
+				return nil, err
+			}
+			return &image{
+				Image: i,
+				opt:   o,
+			}, nil
+		}
 		ii, err := got.ImageIndex()
 		if err != nil {
 			return nil, err
@@ -106,7 +116,7 @@ func SBOMTag(ref name.Reference, opts ...Option) (name.Tag, error) {
 
 func suffixTag(ref name.Reference, suffix string, o *options) (name.Tag, error) {
 	var h v1.Hash
-	if digest, ok := ref.(name.Digest); ok {
+	if digest, ok := ref.(name.Digest); o.Platform == nil && ok {
 		var err error
 		h, err = v1.NewHash(digest.DigestStr())
 		if err != nil { // This is effectively impossible.
@@ -118,6 +128,16 @@ func suffixTag(ref name.Reference, suffix string, o *options) (name.Tag, error) 
 			return name.Tag{}, err
 		}
 		h = desc.Digest
+		if o.Platform != nil && desc.MediaType.IsIndex() {
+			img, err := desc.Image()
+			if err != nil {
+				return name.Tag{}, err
+			}
+			h, err = img.Digest()
+			if err != nil {
+				return name.Tag{}, err
+			}
+		}
 	}
 	return o.TargetRepository.Tag(normalize(h, o.TagPrefix, suffix)), nil
 }

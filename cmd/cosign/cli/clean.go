@@ -67,17 +67,22 @@ func CleanCmd(ctx context.Context, regOpts options.RegistryOptions, cleanType, i
 
 	remoteOpts := regOpts.GetRegistryClientOpts(ctx)
 
-	sigRef, err := ociremote.SignatureTag(ref, ociremote.WithRemoteOptions(remoteOpts...))
+	ociremoteOpts, err := regOpts.ClientOpts(ctx)
 	if err != nil {
 		return err
 	}
 
-	attRef, err := ociremote.AttestationTag(ref, ociremote.WithRemoteOptions(remoteOpts...))
+	sigRef, err := ociremote.SignatureTag(ref, ociremoteOpts...)
 	if err != nil {
 		return err
 	}
 
-	sbomRef, err := ociremote.SBOMTag(ref, ociremote.WithRemoteOptions(remoteOpts...))
+	attRef, err := ociremote.AttestationTag(ref, ociremoteOpts...)
+	if err != nil {
+		return err
+	}
+
+	sbomRef, err := ociremote.SBOMTag(ref, ociremoteOpts...)
 	if err != nil {
 		return err
 	}

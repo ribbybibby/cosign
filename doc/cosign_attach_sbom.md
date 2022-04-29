@@ -20,6 +20,7 @@ cosign attach sbom [flags]
   -h, --help                                                                                     help for sbom
       --input-format string                                                                      type of sbom input format (json|xml|text)
       --k8s-keychain                                                                             whether to use the kubernetes keychain instead of the default keychain (supports workload identity).
+      --platform platform                                                                        resolve multi-arch images to a specific platform. Specify the platform in the form os/arch[/variant][:osversion] (e.g. linux/amd64).
       --sbom string                                                                              path to the sbom, or {-} for stdin
       --type string                                                                              type of sbom (spdx|cyclonedx|syft) (default "spdx")
 ```

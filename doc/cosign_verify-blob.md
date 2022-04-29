@@ -72,6 +72,7 @@ cosign verify-blob [flags]
   -h, --help                                                                                     help for verify-blob
       --k8s-keychain                                                                             whether to use the kubernetes keychain instead of the default keychain (supports workload identity).
       --key string                                                                               path to the public key file, KMS URI or Kubernetes Secret
+      --platform platform                                                                        resolve multi-arch images to a specific platform. Specify the platform in the form os/arch[/variant][:osversion] (e.g. linux/amd64).
       --rekor-url string                                                                         [EXPERIMENTAL] address of rekor STL server (default "https://rekor.sigstore.dev")
       --signature string                                                                         signature content or path or remote URL
       --sk                                                                                       whether to use a hardware security key

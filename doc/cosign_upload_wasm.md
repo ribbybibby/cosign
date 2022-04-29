@@ -20,6 +20,7 @@ cosign upload wasm [flags]
   -f, --file string                                                                              path to the wasm file to upload
   -h, --help                                                                                     help for wasm
       --k8s-keychain                                                                             whether to use the kubernetes keychain instead of the default keychain (supports workload identity).
+      --platform platform                                                                        resolve multi-arch images to a specific platform. Specify the platform in the form os/arch[/variant][:osversion] (e.g. linux/amd64).
 ```
 
 ### Options inherited from parent commands

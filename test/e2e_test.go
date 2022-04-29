@@ -38,6 +38,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/registry"
+	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/random"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -73,14 +74,15 @@ var passFunc = func(_ bool) ([]byte, error) {
 	return keyPass, nil
 }
 
-var verify = func(keyRef, imageRef string, checkClaims bool, annotations map[string]interface{}, attachment string) error {
+var verify = func(keyRef, imageRef string, checkClaims bool, annotations map[string]interface{}, attachment string, rOpts options.RegistryOptions) error {
 	cmd := cliverify.VerifyCommand{
-		KeyRef:        keyRef,
-		RekorURL:      rekorURL,
-		CheckClaims:   checkClaims,
-		Annotations:   sigs.AnnotationsMap{Annotations: annotations},
-		Attachment:    attachment,
-		HashAlgorithm: crypto.SHA256,
+		KeyRef:          keyRef,
+		RekorURL:        rekorURL,
+		CheckClaims:     checkClaims,
+		Annotations:     sigs.AnnotationsMap{Annotations: annotations},
+		Attachment:      attachment,
+		HashAlgorithm:   crypto.SHA256,
+		RegistryOptions: rOpts,
 	}
 
 	args := []string{imageRef}
@@ -120,7 +122,7 @@ func TestSignVerify(t *testing.T) {
 
 	ctx := context.Background()
 	// Verify should fail at first
-	mustErr(verify(pubKeyPath, imgName, true, nil, ""), t)
+	mustErr(verify(pubKeyPath, imgName, true, nil, "", options.RegistryOptions{}), t)
 	// So should download
 	mustErr(download.SignatureCmd(ctx, options.RegistryOptions{}, imgName), t)
 
@@ -129,21 +131,72 @@ func TestSignVerify(t *testing.T) {
 	must(sign.SignCmd(ro, ko, options.RegistryOptions{}, nil, []string{imgName}, "", "", true, "", "", "", false, false, ""), t)
 
 	// Now verify and download should work!
-	must(verify(pubKeyPath, imgName, true, nil, ""), t)
+	must(verify(pubKeyPath, imgName, true, nil, "", options.RegistryOptions{}), t)
 	must(download.SignatureCmd(ctx, options.RegistryOptions{}, imgName), t)
 
 	// Look for a specific annotation
-	mustErr(verify(pubKeyPath, imgName, true, map[string]interface{}{"foo": "bar"}, ""), t)
+	mustErr(verify(pubKeyPath, imgName, true, map[string]interface{}{"foo": "bar"}, "", options.RegistryOptions{}), t)
 
 	// Sign the image with an annotation
 	annotations := map[string]interface{}{"foo": "bar"}
 	must(sign.SignCmd(ro, ko, options.RegistryOptions{}, annotations, []string{imgName}, "", "", true, "", "", "", false, false, ""), t)
 
 	// It should match this time.
-	must(verify(pubKeyPath, imgName, true, map[string]interface{}{"foo": "bar"}, ""), t)
+	must(verify(pubKeyPath, imgName, true, map[string]interface{}{"foo": "bar"}, "", options.RegistryOptions{}), t)
 
 	// But two doesn't work
-	mustErr(verify(pubKeyPath, imgName, true, map[string]interface{}{"foo": "bar", "baz": "bat"}, ""), t)
+	mustErr(verify(pubKeyPath, imgName, true, map[string]interface{}{"foo": "bar", "baz": "bat"}, "", options.RegistryOptions{}), t)
+}
+
+func TestSignVerifyPlatform(t *testing.T) {
+	repo, stop := reg(t)
+	defer stop()
+	td := t.TempDir()
+
+	imgName := path.Join(repo, "cosign-e2e")
+
+	_, _, cleanup := mkimageindex(t, imgName)
+	defer cleanup()
+
+	_, privKeyPath, pubKeyPath := keypair(t, td)
+
+	platform, err := v1.ParsePlatform("linux/amd64")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rOpts := options.RegistryOptions{
+		Platform: options.Platform{platform},
+	}
+
+	ctx := context.Background()
+
+	// Verify should fail at first
+	mustErr(verify(pubKeyPath, imgName, true, nil, "", rOpts), t)
+	// So should download
+	mustErr(download.SignatureCmd(ctx, rOpts, imgName), t)
+
+	// Now sign the image
+	ko := options.KeyOpts{KeyRef: privKeyPath, PassFunc: passFunc}
+	must(sign.SignCmd(ro, ko, rOpts, nil, []string{imgName}, "", "", true, "", "", "", false, false, ""), t)
+
+	// Now verify and download should work!
+	must(verify(pubKeyPath, imgName, true, nil, "", rOpts), t)
+	must(download.SignatureCmd(ctx, rOpts, imgName), t)
+
+	// But not without a platform specified
+	mustErr(verify(pubKeyPath, imgName, true, nil, "", options.RegistryOptions{}), t)
+	mustErr(download.SignatureCmd(ctx, options.RegistryOptions{}, imgName), t)
+
+	// Or a different platform altogether
+	platformArm, err := v1.ParsePlatform("linux/arm64")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rOptsArm := options.RegistryOptions{
+		Platform: options.Platform{platformArm},
+	}
+	mustErr(verify(pubKeyPath, imgName, true, nil, "", rOptsArm), t)
+	mustErr(download.SignatureCmd(ctx, rOptsArm, imgName), t)
 }
 
 func TestSignVerifyClean(t *testing.T) {
@@ -164,14 +217,50 @@ func TestSignVerifyClean(t *testing.T) {
 	must(sign.SignCmd(ro, ko, options.RegistryOptions{}, nil, []string{imgName}, "", "", true, "", "", "", false, false, ""), t)
 
 	// Now verify and download should work!
-	must(verify(pubKeyPath, imgName, true, nil, ""), t)
+	must(verify(pubKeyPath, imgName, true, nil, "", options.RegistryOptions{}), t)
 	must(download.SignatureCmd(ctx, options.RegistryOptions{}, imgName), t)
 
 	// Now clean signature from the given image
 	must(cli.CleanCmd(ctx, options.RegistryOptions{}, "all", imgName, true), t)
 
 	// It doesn't work
-	mustErr(verify(pubKeyPath, imgName, true, nil, ""), t)
+	mustErr(verify(pubKeyPath, imgName, true, nil, "", options.RegistryOptions{}), t)
+}
+
+func TestSignVerifyCleanPlatform(t *testing.T) {
+	repo, stop := reg(t)
+	defer stop()
+	td := t.TempDir()
+
+	imgName := path.Join(repo, "cosign-e2e")
+
+	_, _, _ = mkimageindex(t, imgName)
+
+	_, privKeyPath, pubKeyPath := keypair(t, td)
+
+	platform, err := v1.ParsePlatform("linux/amd64")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rOpts := options.RegistryOptions{
+		Platform: options.Platform{platform},
+	}
+
+	ctx := context.Background()
+
+	// Now sign the image
+	ko := options.KeyOpts{KeyRef: privKeyPath, PassFunc: passFunc}
+	must(sign.SignCmd(ro, ko, rOpts, nil, []string{imgName}, "", "", true, "", "", "", false, false, ""), t)
+
+	// Now verify and download should work!
+	must(verify(pubKeyPath, imgName, true, nil, "", rOpts), t)
+	must(download.SignatureCmd(ctx, rOpts, imgName), t)
+
+	// Now clean signature from the given image
+	must(cli.CleanCmd(ctx, rOpts, "all", imgName, true), t)
+
+	// It doesn't work
+	mustErr(verify(pubKeyPath, imgName, true, nil, "", rOpts), t)
 }
 
 func TestImportSignVerifyClean(t *testing.T) {
@@ -193,14 +282,14 @@ func TestImportSignVerifyClean(t *testing.T) {
 	must(sign.SignCmd(ro, ko, options.RegistryOptions{}, nil, []string{imgName}, "", "", true, "", "", "", false, false, ""), t)
 
 	// Now verify and download should work!
-	must(verify(pubKeyPath, imgName, true, nil, ""), t)
+	must(verify(pubKeyPath, imgName, true, nil, "", options.RegistryOptions{}), t)
 	must(download.SignatureCmd(ctx, options.RegistryOptions{}, imgName), t)
 
 	// Now clean signature from the given image
 	must(cli.CleanCmd(ctx, options.RegistryOptions{}, "all", imgName, true), t)
 
 	// It doesn't work
-	mustErr(verify(pubKeyPath, imgName, true, nil, ""), t)
+	mustErr(verify(pubKeyPath, imgName, true, nil, "", options.RegistryOptions{}), t)
 }
 
 func TestAttestVerify(t *testing.T) {
@@ -210,6 +299,71 @@ func TestAttestVerify(t *testing.T) {
 		`builder: id: "1"`,
 		`builder: id: "2"`,
 	)
+}
+
+func TestAttestVerifyPlatform(t *testing.T) {
+	repo, stop := reg(t)
+	defer stop()
+	td := t.TempDir()
+
+	predicateType := "slsaprovenance"
+
+	imgName := path.Join(repo, fmt.Sprintf("cosign-attest-%s-e2e-image", predicateType))
+
+	_, _, cleanup := mkimageindex(t, imgName)
+	defer cleanup()
+
+	_, privKeyPath, pubKeyPath := keypair(t, td)
+
+	platform, err := v1.ParsePlatform("linux/amd64")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rOpts := options.RegistryOptions{
+		Platform: options.Platform{platform},
+	}
+
+	ctx := context.Background()
+
+	attestationPath := filepath.Join(td, fmt.Sprintf("cosign-attest-%s-e2e-attestation", predicateType))
+	if err := os.WriteFile(attestationPath, []byte(`{ "buildType": "x", "builder": { "id": "2" }, "recipe": {} }`), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	policyPath := filepath.Join(td, "policy.cue")
+	if err := os.WriteFile(policyPath, []byte(`builder: id: "1"`), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	// Attest the image
+	ko := options.KeyOpts{KeyRef: privKeyPath, PassFunc: passFunc}
+	must(attest.AttestCmd(ctx, ko, rOpts, imgName, "", "", false, attestationPath, false,
+		predicateType, false, 30*time.Second), t)
+
+	// Verify the attestation
+	verifyAttestation := cliverify.VerifyAttestationCommand{
+		KeyRef:          pubKeyPath,
+		RegistryOptions: rOpts,
+		PredicateType:   predicateType,
+		Policies: []string{
+			policyPath,
+		},
+	}
+	must(verifyAttestation.Exec(ctx, []string{imgName}), t)
+
+	// It should fail without a platform specified
+	verifyAttestation.RegistryOptions = options.RegistryOptions{}
+	mustErr(verifyAttestation.Exec(ctx, []string{imgName}), t)
+
+	// Or a different platform entirely
+	platformArm, err := v1.ParsePlatform("linux/arm64")
+	if err != nil {
+		t.Fatal(err)
+	}
+	verifyAttestation.RegistryOptions = options.RegistryOptions{
+		Platform: options.Platform{platformArm},
+	}
+	mustErr(verifyAttestation.Exec(ctx, []string{imgName}), t)
 }
 
 func TestAttestVerifySPDXJSON(t *testing.T) {
@@ -274,7 +428,7 @@ func attestVerify(t *testing.T, predicateType, attestation, goodCue, badCue stri
 	must(verifyAttestation.Exec(ctx, []string{imgName}), t)
 
 	// Look for a specific annotation
-	mustErr(verify(pubKeyPath, imgName, true, map[string]interface{}{"foo": "bar"}, ""), t)
+	mustErr(verify(pubKeyPath, imgName, true, map[string]interface{}{"foo": "bar"}, "", options.RegistryOptions{}), t)
 }
 
 func TestAttestationReplace(t *testing.T) {
@@ -355,12 +509,12 @@ func TestRekorBundle(t *testing.T) {
 	// Sign the image
 	must(sign.SignCmd(ro, ko, options.RegistryOptions{}, nil, []string{imgName}, "", "", true, "", "", "", false, false, ""), t)
 	// Make sure verify works
-	must(verify(pubKeyPath, imgName, true, nil, ""), t)
+	must(verify(pubKeyPath, imgName, true, nil, "", options.RegistryOptions{}), t)
 
 	// Make sure offline verification works with bundling
 	// use rekor prod since we have hardcoded the public key
 	os.Setenv(serverEnv, "notreal")
-	must(verify(pubKeyPath, imgName, true, nil, ""), t)
+	must(verify(pubKeyPath, imgName, true, nil, "", options.RegistryOptions{}), t)
 }
 
 func TestDuplicateSign(t *testing.T) {
@@ -377,7 +531,7 @@ func TestDuplicateSign(t *testing.T) {
 
 	ctx := context.Background()
 	// Verify should fail at first
-	mustErr(verify(pubKeyPath, imgName, true, nil, ""), t)
+	mustErr(verify(pubKeyPath, imgName, true, nil, "", options.RegistryOptions{}), t)
 	// So should download
 	mustErr(download.SignatureCmd(ctx, options.RegistryOptions{}, imgName), t)
 
@@ -386,7 +540,7 @@ func TestDuplicateSign(t *testing.T) {
 	must(sign.SignCmd(ro, ko, options.RegistryOptions{}, nil, []string{imgName}, "", "", true, "", "", "", false, false, ""), t)
 
 	// Now verify and download should work!
-	must(verify(pubKeyPath, imgName, true, nil, ""), t)
+	must(verify(pubKeyPath, imgName, true, nil, "", options.RegistryOptions{}), t)
 	must(download.SignatureCmd(ctx, options.RegistryOptions{}, imgName), t)
 
 	// Signing again should work just fine...
@@ -411,7 +565,7 @@ func TestKeyURLVerify(t *testing.T) {
 	keyRef := "https://raw.githubusercontent.com/GoogleContainerTools/distroless/main/cosign.pub"
 	img := "gcr.io/distroless/base:latest"
 
-	must(verify(keyRef, img, true, nil, ""), t)
+	must(verify(keyRef, img, true, nil, "", options.RegistryOptions{}), t)
 }
 
 func TestGenerateKeyPairEnvVar(t *testing.T) {
@@ -475,23 +629,23 @@ func TestMultipleSignatures(t *testing.T) {
 	_, priv2, pub2 := keypair(t, td2)
 
 	// Verify should fail at first for both keys
-	mustErr(verify(pub1, imgName, true, nil, ""), t)
-	mustErr(verify(pub2, imgName, true, nil, ""), t)
+	mustErr(verify(pub1, imgName, true, nil, "", options.RegistryOptions{}), t)
+	mustErr(verify(pub2, imgName, true, nil, "", options.RegistryOptions{}), t)
 
 	// Now sign the image with one key
 	ko := options.KeyOpts{KeyRef: priv1, PassFunc: passFunc}
 	must(sign.SignCmd(ro, ko, options.RegistryOptions{}, nil, []string{imgName}, "", "", true, "", "", "", false, false, ""), t)
 	// Now verify should work with that one, but not the other
-	must(verify(pub1, imgName, true, nil, ""), t)
-	mustErr(verify(pub2, imgName, true, nil, ""), t)
+	must(verify(pub1, imgName, true, nil, "", options.RegistryOptions{}), t)
+	mustErr(verify(pub2, imgName, true, nil, "", options.RegistryOptions{}), t)
 
 	// Now sign with the other key too
 	ko.KeyRef = priv2
 	must(sign.SignCmd(ro, ko, options.RegistryOptions{}, nil, []string{imgName}, "", "", true, "", "", "", false, false, ""), t)
 
 	// Now verify should work with both
-	must(verify(pub1, imgName, true, nil, ""), t)
-	must(verify(pub2, imgName, true, nil, ""), t)
+	must(verify(pub1, imgName, true, nil, "", options.RegistryOptions{}), t)
+	must(verify(pub2, imgName, true, nil, "", options.RegistryOptions{}), t)
 }
 
 func TestSignBlob(t *testing.T) {
@@ -609,6 +763,53 @@ func TestGenerate(t *testing.T) {
 
 	equals(desc.Digest.String(), ss.Critical.Image.DockerManifestDigest, t)
 	equals(ss.Optional["foo"], "bar", t)
+}
+
+func TestGeneratePlatform(t *testing.T) {
+	repo, stop := reg(t)
+	defer stop()
+
+	imgName := path.Join(repo, "cosign-e2e")
+	_, desc, cleanup := mkimageindex(t, imgName)
+	defer cleanup()
+
+	platform, err := v1.ParsePlatform("linux/amd64")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rOpts := options.RegistryOptions{
+		Platform: options.Platform{platform},
+	}
+
+	// Get the platform-specific image digest
+	ref, err := name.ParseReference(imgName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	img, err := remote.Image(ref, remote.WithPlatform(*platform))
+	if err != nil {
+		t.Fatal(err)
+	}
+	digest, err := img.Digest()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// The payload should contain the digest of the platform-specific image
+	b := bytes.Buffer{}
+	must(generate.GenerateCmd(context.Background(), rOpts, imgName, nil, &b), t)
+	ss := payload.SimpleContainerImage{}
+	must(json.Unmarshal(b.Bytes(), &ss), t)
+
+	equals(digest.String(), ss.Critical.Image.DockerManifestDigest, t)
+
+	// Without the platform, it should be digest of the manifest list
+	b.Reset()
+	must(generate.GenerateCmd(context.Background(), options.RegistryOptions{}, imgName, nil, &b), t)
+	ss = payload.SimpleContainerImage{}
+	must(json.Unmarshal(b.Bytes(), &ss), t)
+
+	equals(desc.Digest.String(), ss.Critical.Image.DockerManifestDigest, t)
 }
 
 func keypair(t *testing.T, td string) (*cosign.KeysBytes, string, string) {
@@ -870,7 +1071,7 @@ func TestSaveLoad(t *testing.T) {
 			// Now sign the image and verify it
 			ko := options.KeyOpts{KeyRef: privKeyPath, PassFunc: passFunc}
 			must(sign.SignCmd(ro, ko, options.RegistryOptions{}, nil, []string{imgName}, "", "", true, "", "", "", false, false, ""), t)
-			must(verify(pubKeyPath, imgName, true, nil, ""), t)
+			must(verify(pubKeyPath, imgName, true, nil, "", options.RegistryOptions{}), t)
 
 			// save the image to a temp dir
 			imageDir := t.TempDir()
@@ -882,7 +1083,7 @@ func TestSaveLoad(t *testing.T) {
 			// load the image from the temp dir into a new image and verify the new image
 			imgName2 := path.Join(repo, fmt.Sprintf("save-load-%d-2", i))
 			must(cli.LoadCmd(ctx, options.LoadOptions{Directory: imageDir}, imgName2), t)
-			must(verify(pubKeyPath, imgName2, true, nil, ""), t)
+			must(verify(pubKeyPath, imgName2, true, nil, "", options.RegistryOptions{}), t)
 		})
 	}
 }
@@ -903,7 +1104,7 @@ func TestSaveLoadAttestation(t *testing.T) {
 	// Now sign the image and verify it
 	ko := options.KeyOpts{KeyRef: privKeyPath, PassFunc: passFunc}
 	must(sign.SignCmd(ro, ko, options.RegistryOptions{}, nil, []string{imgName}, "", "", true, "", "", "", false, false, ""), t)
-	must(verify(pubKeyPath, imgName, true, nil, ""), t)
+	must(verify(pubKeyPath, imgName, true, nil, "", options.RegistryOptions{}), t)
 
 	// now, append an attestation to the image
 	slsaAttestation := `{ "builder": { "id": "2" }, "recipe": {} }`
@@ -924,7 +1125,7 @@ func TestSaveLoadAttestation(t *testing.T) {
 	// load the image from the temp dir into a new image and verify the new image
 	imgName2 := path.Join(repo, "save-load-2")
 	must(cli.LoadCmd(ctx, options.LoadOptions{Directory: imageDir}, imgName2), t)
-	must(verify(pubKeyPath, imgName2, true, nil, ""), t)
+	must(verify(pubKeyPath, imgName2, true, nil, "", options.RegistryOptions{}), t)
 	// Use cue to verify attestation on the new image
 	policyPath := filepath.Join(td, "policy.cue")
 	verifyAttestation := cliverify.VerifyAttestationCommand{
@@ -986,16 +1187,16 @@ func TestAttachSBOM(t *testing.T) {
 	_, _, pubKeyPath2 := keypair(t, td2)
 
 	// Verify should fail on a bad input
-	mustErr(verify(pubKeyPath1, imgName, true, nil, "sbom"), t)
-	mustErr(verify(pubKeyPath2, imgName, true, nil, "sbom"), t)
+	mustErr(verify(pubKeyPath1, imgName, true, nil, "sbom", options.RegistryOptions{}), t)
+	mustErr(verify(pubKeyPath2, imgName, true, nil, "sbom", options.RegistryOptions{}), t)
 
 	// Now sign the sbom with one key
 	ko1 := options.KeyOpts{KeyRef: privKeyPath1, PassFunc: passFunc}
 	must(sign.SignCmd(ro, ko1, options.RegistryOptions{}, nil, []string{imgName}, "", "", true, "", "", "", false, false, "sbom"), t)
 
 	// Now verify should work with that one, but not the other
-	must(verify(pubKeyPath1, imgName, true, nil, "sbom"), t)
-	mustErr(verify(pubKeyPath2, imgName, true, nil, "sbom"), t)
+	must(verify(pubKeyPath1, imgName, true, nil, "sbom", options.RegistryOptions{}), t)
+	mustErr(verify(pubKeyPath2, imgName, true, nil, "sbom", options.RegistryOptions{}), t)
 }
 
 func setenv(t *testing.T, k, v string) func() {
@@ -1020,7 +1221,7 @@ func TestTlog(t *testing.T) {
 	_, privKeyPath, pubKeyPath := keypair(t, td)
 
 	// Verify should fail at first
-	mustErr(verify(pubKeyPath, imgName, true, nil, ""), t)
+	mustErr(verify(pubKeyPath, imgName, true, nil, "", options.RegistryOptions{}), t)
 
 	// Now sign the image without the tlog
 	ko := options.KeyOpts{
@@ -1031,18 +1232,18 @@ func TestTlog(t *testing.T) {
 	must(sign.SignCmd(ro, ko, options.RegistryOptions{}, nil, []string{imgName}, "", "", true, "", "", "", false, false, ""), t)
 
 	// Now verify should work!
-	must(verify(pubKeyPath, imgName, true, nil, ""), t)
+	must(verify(pubKeyPath, imgName, true, nil, "", options.RegistryOptions{}), t)
 
 	// Now we turn on the tlog!
 	defer setenv(t, options.ExperimentalEnv, "1")()
 
 	// Verify shouldn't work since we haven't put anything in it yet.
-	mustErr(verify(pubKeyPath, imgName, true, nil, ""), t)
+	mustErr(verify(pubKeyPath, imgName, true, nil, "", options.RegistryOptions{}), t)
 
 	// Sign again with the tlog env var on
 	must(sign.SignCmd(ro, ko, options.RegistryOptions{}, nil, []string{imgName}, "", "", true, "", "", "", false, false, ""), t)
 	// And now verify works!
-	must(verify(pubKeyPath, imgName, true, nil, ""), t)
+	must(verify(pubKeyPath, imgName, true, nil, "", options.RegistryOptions{}), t)
 }
 
 func TestGetPublicKeyCustomOut(t *testing.T) {
@@ -1111,7 +1312,7 @@ func mkimageindex(t *testing.T, n string) (name.Reference, *remote.Descriptor, f
 	if err != nil {
 		t.Fatal(err)
 	}
-	ii, err := random.Index(512, 5, 4)
+	ii, err := newMultiArchIndex(512, 5, "linux/amd64", "linux/arm64", "linux/arm", "linux/s390x", "linux/ppc64le")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1206,7 +1407,7 @@ func TestInvalidBundle(t *testing.T) {
 
 	must(sign.SignCmd(ro, ko, regOpts, nil, []string{img1}, "", "", true, "", "", "", true, false, ""), t)
 	// verify image1
-	must(verify(pubKeyPath, img1, true, nil, ""), t)
+	must(verify(pubKeyPath, img1, true, nil, "", options.RegistryOptions{}), t)
 	// extract the bundle from image1
 	si, err := ociremote.SignedImage(imgRef, remoteOpts)
 	must(err, t)
@@ -1230,7 +1431,7 @@ func TestInvalidBundle(t *testing.T) {
 	imgRef2, _, cleanup := mkimage(t, img2)
 	defer cleanup()
 	must(sign.SignCmd(ro, ko, regOpts, nil, []string{img2}, "", "", true, "", "", "", false, false, ""), t)
-	must(verify(pubKeyPath, img2, true, nil, ""), t)
+	must(verify(pubKeyPath, img2, true, nil, "", options.RegistryOptions{}), t)
 
 	si2, err := ociremote.SignedEntity(imgRef2, remoteOpts)
 	must(err, t)
@@ -1252,7 +1453,7 @@ func TestInvalidBundle(t *testing.T) {
 	if err := remote.Delete(sigsTag); err != nil {
 		t.Fatal(err)
 	}
-	mustErr(verify(pubKeyPath, img2, true, nil, ""), t)
+	mustErr(verify(pubKeyPath, img2, true, nil, "", options.RegistryOptions{}), t)
 
 	newSig, err := mutate.Signature(gottenSigs2[0], mutate.WithBundle(bund))
 	must(err, t)
@@ -1265,5 +1466,5 @@ func TestInvalidBundle(t *testing.T) {
 	}
 
 	// veriyfing image2 now should fail
-	mustErr(verify(pubKeyPath, img2, true, nil, ""), t)
+	mustErr(verify(pubKeyPath, img2, true, nil, "", options.RegistryOptions{}), t)
 }

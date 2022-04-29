@@ -33,6 +33,7 @@ cosign upload blob [flags]
   -f, --files strings                                                                            <filepath>:[platform/arch]
   -h, --help                                                                                     help for blob
       --k8s-keychain                                                                             whether to use the kubernetes keychain instead of the default keychain (supports workload identity).
+      --platform platform                                                                        resolve multi-arch images to a specific platform. Specify the platform in the form os/arch[/variant][:osversion] (e.g. linux/amd64).
 ```
 
 ### Options inherited from parent commands

@@ -25,6 +25,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/authn/github"
 	"github.com/google/go-containerregistry/pkg/name"
+	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/google"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	ociremote "github.com/sigstore/cosign/pkg/oci/remote"
@@ -40,6 +41,7 @@ type RegistryOptions struct {
 	KubernetesKeychain bool
 	RefOpts            ReferenceOptions
 	Keychain           Keychain
+	Platform           Platform
 }
 
 var _ Interface = (*RegistryOptions)(nil)
@@ -51,6 +53,9 @@ func (o *RegistryOptions) AddFlags(cmd *cobra.Command) {
 
 	cmd.Flags().BoolVar(&o.KubernetesKeychain, "k8s-keychain", false,
 		"whether to use the kubernetes keychain instead of the default keychain (supports workload identity).")
+
+	cmd.Flags().Var(&o.Platform, "platform",
+		"resolve multi-arch images to a specific platform. Specify the platform in the form os/arch[/variant][:osversion] (e.g. linux/amd64).")
 
 	o.RefOpts.AddFlags(cmd)
 }
@@ -67,6 +72,11 @@ func (o *RegistryOptions) ClientOpts(ctx context.Context) ([]ociremote.Option, e
 	if (targetRepoOverride != name.Repository{}) {
 		opts = append(opts, ociremote.WithTargetRepository(targetRepoOverride))
 	}
+
+	if o.Platform.Platform != nil {
+		opts = append(opts, ociremote.WithPlatform(o.Platform.Platform))
+	}
+
 	return opts, nil
 }
 
@@ -96,4 +106,32 @@ func (o *RegistryOptions) GetRegistryClientOpts(ctx context.Context) []remote.Op
 		opts = append(opts, remote.WithTransport(&http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}})) // #nosec G402
 	}
 	return opts
+}
+
+type Platform struct {
+	*v1.Platform
+}
+
+func (pv *Platform) Set(platform string) error {
+	if platform == "" {
+		return nil
+	}
+	p, err := v1.ParsePlatform(platform)
+	if err != nil {
+		return err
+	}
+	pv.Platform = p
+	return nil
+}
+
+func (pv *Platform) String() string {
+	if pv.Platform == nil {
+		return ""
+	}
+
+	return pv.String()
+}
+
+func (pv *Platform) Type() string {
+	return "platform"
 }

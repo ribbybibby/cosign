@@ -51,6 +51,7 @@ cosign sign-blob [flags]
       --output string                                                                            write the signature to FILE
       --output-certificate string                                                                write the certificate to FILE
       --output-signature string                                                                  write the signature to FILE
+      --platform platform                                                                        resolve multi-arch images to a specific platform. Specify the platform in the form os/arch[/variant][:osversion] (e.g. linux/amd64).
       --rekor-url string                                                                         [EXPERIMENTAL] address of rekor STL server (default "https://rekor.sigstore.dev")
       --sk                                                                                       whether to use a hardware security key
       --slot string                                                                              security key slot to use for generated key (default: signature) (authentication|signature|card-authentication|key-management)

@@ -20,6 +20,7 @@ cosign attach attestation [flags]
       --attestation string                                                                       path to the attestation envelope
   -h, --help                                                                                     help for attestation
       --k8s-keychain                                                                             whether to use the kubernetes keychain instead of the default keychain (supports workload identity).
+      --platform platform                                                                        resolve multi-arch images to a specific platform. Specify the platform in the form os/arch[/variant][:osversion] (e.g. linux/amd64).
 ```
 
 ### Options inherited from parent commands

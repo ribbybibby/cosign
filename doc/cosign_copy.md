@@ -29,6 +29,7 @@ cosign copy [flags]
   -f, --force                                                                                    overwrite destination image(s), if necessary
   -h, --help                                                                                     help for copy
       --k8s-keychain                                                                             whether to use the kubernetes keychain instead of the default keychain (supports workload identity).
+      --platform platform                                                                        resolve multi-arch images to a specific platform. Specify the platform in the form os/arch[/variant][:osversion] (e.g. linux/amd64).
       --sig-only                                                                                 only copy the image signature
 ```
 

@@ -56,6 +56,7 @@ cosign attest [flags]
       --oidc-disable-ambient-providers                                                           [EXPERIMENTAL] Disable ambient OIDC providers. When true, ambient credentials will not be read
       --oidc-issuer string                                                                       [EXPERIMENTAL] OIDC provider to be used to issue ID token (default "https://oauth2.sigstore.dev/auth")
       --oidc-redirect-url string                                                                 [EXPERIMENTAL] OIDC redirect URL (Optional). The default oidc-redirect-url is 'http://localhost:0/auth/callback'.
+      --platform platform                                                                        resolve multi-arch images to a specific platform. Specify the platform in the form os/arch[/variant][:osversion] (e.g. linux/amd64).
       --predicate string                                                                         path to the predicate file.
   -r, --recursive                                                                                if a multi-arch image is specified, additionally sign each discrete image
       --rekor-url string                                                                         [EXPERIMENTAL] address of rekor STL server (default "https://rekor.sigstore.dev")

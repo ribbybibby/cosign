@@ -21,6 +21,7 @@ import (
 
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
+	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 )
 
@@ -43,6 +44,7 @@ type options struct {
 	TagPrefix         string
 	TargetRepository  name.Repository
 	ROpt              []remote.Option
+	Platform          *v1.Platform
 
 	OriginalOptions []Option
 }
@@ -68,6 +70,12 @@ func makeOptions(target name.Repository, opts ...Option) *options {
 
 	for _, option := range opts {
 		option(o)
+	}
+
+	// If platform is set then ensure it overrides any platform options
+	// passed by WithRemoteOptions
+	if o.Platform != nil {
+		o.ROpt = append(o.ROpt, remote.WithPlatform(*o.Platform))
 	}
 
 	return o
@@ -118,6 +126,14 @@ func WithRemoteOptions(opts ...remote.Option) Option {
 func WithTargetRepository(repo name.Repository) Option {
 	return func(o *options) {
 		o.TargetRepository = repo
+	}
+}
+
+// WithPlatform is a functional option for selecting a plaform-specific image
+// from an image index.
+func WithPlatform(platform *v1.Platform) Option {
+	return func(o *options) {
+		o.Platform = platform
 	}
 }
 
